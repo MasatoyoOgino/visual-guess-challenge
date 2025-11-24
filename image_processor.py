@@ -9,127 +9,95 @@ import numpy as np
 
 class ImageProcessor:
     """画像プロセッサークラス"""
-    
+
     def __init__(self):
         """初期化"""
         pass
-    
-    def apply_blur(self, image, current_level, max_level):
+
+    def apply_blur(self, image, progress):
         """
-        ガウシアンボケを適用
-        
-        Args:
-            image: 入力画像（RGB形式）
-            current_level: 現在のレベル（1-max_level）
-            max_level: 最大レベル
-            
-        Returns:
-            処理された画像
+        progress: 0.0 (開始) -> 1.0 (クリア)
         """
         if image is None:
             return None
-        
-        # レベルに応じてσ値を計算
-        # レベル1: σ=15, レベル2: σ=8, レベル3: σ=4, レベル4: σ=2, レベル5: σ=0
-        sigma_values = [15, 8, 4, 2, 0]
-        
-        if current_level <= len(sigma_values):
-            sigma = sigma_values[current_level - 1]
-        else:
-            sigma = 0
-        
-        if sigma == 0:
+
+        # 進行度を 0.0-1.0 にクリップ
+        progress = max(0.0, min(1.0, progress))
+
+        # 最大ぼかし強度 (sigma)
+        max_sigma = 30.0
+
+        # 進行度に応じてsigmaを減少 (1.0のとき0になる)
+        sigma = max_sigma * (1.0 - progress)
+
+        if sigma <= 0.1:  # ほぼ0なら処理しない
             return image.copy()
-        
-        # ガウシアンフィルタを適用
-        # kernel_sizeはσに基づいて計算（奇数にする）
-        kernel_size = int(6 * sigma + 1)
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        
-        blurred = cv2.GaussianBlur(image, (kernel_size, kernel_size), sigma)
-        return blurred
-    
-    def apply_zoom(self, image, current_level, max_level):
+
+        # カーネルサイズをsigmaから計算 (奇数にする必要がある)
+        ksize = int(sigma * 6) + 1
+        if ksize % 2 == 0:
+            ksize += 1
+
+        return cv2.GaussianBlur(image, (ksize, ksize), sigma)
+
+    def apply_zoom(self, image, progress):
         """
-        ズーム処理を適用（中央部分を切り出して拡大）
-        
-        Args:
-            image: 入力画像（RGB形式）
-            current_level: 現在のレベル（1-max_level）
-            max_level: 最大レベル
-            
-        Returns:
-            処理された画像
+        progress: 0.0 (開始) -> 1.0 (クリア)
         """
         if image is None:
             return None
-        
+
         height, width = image.shape[:2]
-        
-        # レベルに応じて表示領域の割合を計算
-        # レベル1: 1/8, レベル2: 1/4, レベル3: 1/2, レベル4: 3/4, レベル5: 全体
-        zoom_ratios = [1/8, 1/4, 1/2, 3/4, 1.0]
-        
-        if current_level <= len(zoom_ratios):
-            ratio = zoom_ratios[current_level - 1]
-        else:
-            ratio = 1.0
-        
-        # 切り出す領域のサイズを計算
-        crop_width = int(width * ratio)
-        crop_height = int(height * ratio)
-        
-        # 中央を切り出す
-        start_x = (width - crop_width) // 2
-        start_y = (height - crop_height) // 2
-        
-        cropped = image[start_y:start_y + crop_height, start_x:start_x + crop_width]
-        
-        # 元のサイズにリサイズ
-        resized = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
-        
-        return resized
-    
-    def apply_hybrid(self, image, current_level, max_level):
-        """
-        ハイブリッド処理（ぼかし＋ズーム）を適用
-        
-        Args:
-            image: 入力画像（RGB形式）
-            current_level: 現在のレベル（1-max_level）
-            max_level: 最大レベル
-            
-        Returns:
-            処理された画像
-        """
-        if image is None:
-            return None
-        
-        # まずズーム処理を適用
-        zoomed = self.apply_zoom(image, current_level, max_level)
-        
-        # 次にぼかし処理を適用（レベルが低いほど強くぼかす）
-        # ハイブリッドモードでは、ぼかしの強度を調整
-        blur_level = max(1, current_level - 2)  # ズームよりぼかしを早く解消
-        blurred = self.apply_blur(zoomed, blur_level, max_level)
-        
-        return blurred
-    
+        progress = max(0.0, min(1.0, progress))
+
+        # 最小表示割合 (例: 12.5% = 1/8)
+        min_ratio = 0.125
+
+        # 線形補間: min_ratio から 1.0 へ変化
+        current_ratio = min_ratio + (1.0 - min_ratio) * progress
+
+        # 切り出しサイズ計算
+        crop_width = int(width * current_ratio)
+        crop_height = int(height * current_ratio)
+
+        # 中心座標
+        cx, cy = width // 2, height // 2
+
+        # 切り出し範囲 (範囲外に出ないようクリップ)
+        x1 = max(0, cx - crop_width // 2)
+        y1 = max(0, cy - crop_height // 2)
+        x2 = min(width, x1 + crop_width)
+        y2 = min(height, y1 + crop_height)
+
+        cropped = image[y1:y2, x1:x2]
+
+        # 元サイズにリサイズ
+        return cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+
+    def apply_hybrid(self, image, progress):
+        # ズームとぼかしを組み合わせる
+        # 例: ズームは線形に，ぼかしは後半早めに消えるように調整
+        zoomed = self.apply_zoom(image, progress)
+
+        # ぼかし用の進行度を少し早める (例: progress 0.8でぼかしゼロ)
+        blur_progress = min(1.0, progress * 1.25)
+        return self.apply_blur(zoomed, blur_progress)
+
     def resize_image(self, image, target_width, target_height):
         """
         画像をリサイズ
-        
+
         Args:
             image: 入力画像
             target_width: 目標幅
             target_height: 目標高さ
-            
+
         Returns:
             リサイズされた画像
         """
         if image is None:
             return None
-        
-        return cv2.resize(image, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
 
+        return cv2.resize(
+            image, (target_width, target_height), interpolation=cv2.INTER_LINEAR
+        )
