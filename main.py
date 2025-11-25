@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QFileDialog,
+    QDesktopWidget,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QImage
@@ -32,7 +33,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Visual Guess Challenge")
-        self.setGeometry(100, 100, 800, 600)
+        self.resize(800, 600)
+        self.center_window()
 
         # ゲーム関連のインスタンス
         self.game_engine = None
@@ -55,6 +57,13 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_display)
 
         self.init_ui()
+
+    def center_window(self):
+        """ウィンドウを画面中央に配置"""
+        qr = self.frameGeometry()
+        cp = QDesktopWidget().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
 
     def init_ui(self):
         """UIの初期化"""
