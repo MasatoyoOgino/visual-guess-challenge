@@ -241,7 +241,7 @@ class MainWindow(QMainWindow):
         # QPixmapに変換して表示
         pixmap = QPixmap.fromImage(q_image)
         scaled_pixmap = pixmap.scaled(
-            self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            self.image_label.contentsRect().size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
         )
         self.image_label.setPixmap(scaled_pixmap)
 
