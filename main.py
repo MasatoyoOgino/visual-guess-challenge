@@ -27,6 +27,7 @@ from game_engine import GameEngine
 from timer_controller import TimerController
 from image_processor import ImageProcessor
 from dataset_loader import DatasetLoader
+from progress_bar import ProgressBar
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
         self.timer_controller = TimerController()
         self.image_processor = ImageProcessor()
         self.dataset_loader = DatasetLoader()
+        self.progress_bar = ProgressBar()
 
         # UIコンポーネント
         self.mode_buttons = {}
@@ -114,6 +116,7 @@ class MainWindow(QMainWindow):
         self.score_label = QLabel("スコア：---")
         info_layout.addWidget(self.time_label)
         info_layout.addWidget(self.score_label)
+        info_layout.addWidget(self.progress_bar)
         info_layout.addStretch()
 
         # 画像表示エリア
@@ -231,6 +234,7 @@ class MainWindow(QMainWindow):
         # 進行度をパーセント表示 (例: 鮮明度 0% -> 100%)
         clarity_percent = int(progress * 100)
         self.hint_label.setText(f"鮮明度：{clarity_percent}%")
+        self.progress_bar.update_progress(progress)
 
     def display_image(self, image):
         """画像を表示する"""
@@ -362,6 +366,7 @@ class MainWindow(QMainWindow):
         self.score_label.setText("スコア：---")
         self.hint_label.setText("ヒントレベル：☆☆☆☆☆")
         self.message_label.setText("メッセージ：何が映っているでしょう？")
+        self.progress_bar.setValue(0)
 
         # モードボタンのチェックを外す
         for btn in self.mode_buttons.values():
