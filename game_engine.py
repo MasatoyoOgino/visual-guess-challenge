@@ -5,6 +5,7 @@ GameEngine - ゲームロジック管理クラス
 
 import cv2
 import os
+import json  # 追加: JSON読み込み用
 import numpy as np
 from image_processor import ImageProcessor
 
@@ -21,9 +22,13 @@ class GameEngine:
         self.time_limit = time_limit
 
         self.original_image = None
-        self.correct_answer = ""
+        self.correct_answer_key = ""  # 変数名を変更 (keyとして扱うため)
+        self.synonyms = {}  # 追加: 類義語辞書
 
         self.image_processor = ImageProcessor()
+        
+        # 追加: 類義語辞書の読み込み
+        self.load_synonyms()
 
         # 1. 正解キーワードの抽出
         self.extract_answer_from_filename()
@@ -32,8 +37,20 @@ class GameEngine:
         self.load_image()
 
         # 3. OpenCVによる主要被写体の検出とクロップ
-        # AIを使わず、画像処理で「被写体らしい場所」を特定します
         self.crop_to_main_subject()
+
+    def load_synonyms(self):  # 追加: 辞書読み込みメソッド
+        """類義語辞書(synonyms.json)を読み込む"""
+        json_path = os.path.join(os.path.dirname(__file__), "synonyms.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    self.synonyms = json.load(f)
+            except Exception as e:
+                print(f"辞書ファイルの読み込みエラー: {e}")
+                self.synonyms = {}
+        else:
+            self.synonyms = {}
 
     def load_image(self):
         """画像を読み込む"""
@@ -50,7 +67,11 @@ class GameEngine:
         """ファイル名から正解キーワードを抽出"""
         filename = os.path.basename(self.image_path)
         name_without_ext = os.path.splitext(filename)[0]
-        self.correct_answer = name_without_ext.split("_")[0].split("-")[0].lower()
+        # キーワードを取得（例: dog_1.jpg -> dog）
+        self.correct_answer_key = name_without_ext.split("_")[0].split("-")[0].lower()
+
+    # (crop_to_main_subject, set_answer, get_processed_image は変更なしのため省略)
+    # ... (既存のコードを維持)
 
     def crop_to_main_subject(self):
         """
@@ -138,7 +159,7 @@ class GameEngine:
 
     def set_answer(self, answer):
         """正解を手動で設定"""
-        self.correct_answer = answer.lower()
+        self.correct_answer_key = answer.lower()
 
     def get_processed_image(self, elapsed_time):
         """
@@ -166,16 +187,29 @@ class GameEngine:
 
     def check_answer(self, user_answer):
         """回答をチェック"""
-        user_answer_lower = user_answer.lower().strip()
-        correct_answer_lower = self.correct_answer.lower().strip()
+        user_answer_norm = user_answer.strip().lower()
+        key = self.correct_answer_key
+        
+        # 有効な正解リストを作成
+        valid_answers = set()
+        valid_answers.add(key)  # ファイル名そのものも正解に含める
 
-        is_correct = (
-            user_answer_lower == correct_answer_lower
-            or correct_answer_lower in user_answer_lower
-            or user_answer_lower in correct_answer_lower
-        )
+        # JSON辞書にキーがあれば、そのリストを追加
+        if key in self.synonyms:
+            # リスト内の単語も小文字化・空白除去してセットに追加
+            for synonym in self.synonyms[key]:
+                valid_answers.add(str(synonym).strip().lower())
+        
+        # 判定: ユーザの回答が正解セットに含まれているか
+        is_correct = user_answer_norm in valid_answers
+        
+        # 元のロジック（部分一致）を残したい場合は以下のように条件を追加可能ですが、
+        # "犬" などの短い単語での誤爆を防ぐため、上記のような完全一致(in set)が推奨されます。
+        
+        # 表示用の正解文字列（代表値）
+        display_answer = self.synonyms[key][1] if (key in self.synonyms and len(self.synonyms[key]) > 1) else key
 
-        return is_correct, self.correct_answer
+        return is_correct, display_answer
 
     def calculate_score(self, elapsed_seconds):
         """スコアを計算"""
@@ -193,4 +227,8 @@ class GameEngine:
 
     def get_correct_answer(self):
         """正解を取得"""
-        return self.correct_answer
+        # 辞書にあれば日本語（リストの2番目と仮定）を返す、なければキーを返すなどの工夫が可能
+        if self.correct_answer_key in self.synonyms and len(self.synonyms[self.correct_answer_key]) > 1:
+             # 例としてリストの2番目の要素（日本語表記など）を正解として表示
+             return self.synonyms[self.correct_answer_key][1]
+        return self.correct_answer_key
