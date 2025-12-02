@@ -422,8 +422,14 @@ class GameScreen(QWidget):
         # 情報表示エリア
         info_layout = QHBoxLayout()
         self.time_label = QLabel("経過時間：00.0s")
+        self.time_label.setFixedWidth(160)  # 固定幅を設定して揺れを防止
+        
         self.score_label = QLabel("スコア：---")
+        self.score_label.setFixedWidth(180)  # 固定幅を設定して揺れを防止
+        
         self.question_counter_label = QLabel("問題：---")
+        self.question_counter_label.setFixedWidth(120)  # 固定幅を設定して揺れを防止
+        
         info_layout.addWidget(self.question_counter_label)
         info_layout.addWidget(self.time_label)
         info_layout.addWidget(self.score_label)
